@@ -48,6 +48,17 @@ auto Fetcher::fetch(const std::string& url) -> Result
 		static_cast<int>(QNetworkRequest::NoLessSafeRedirectPolicy));
 	request.setMaximumRedirectsAllowed(10);
 
+	// Apply custom headers
+	for (const auto& [name, value] : m_customHeaders)
+	{
+		request.setRawHeader(
+			QByteArray::fromStdString(name),
+			QByteArray::fromStdString(value));
+	}
+
+	// HTTP/2 toggle
+	request.setAttribute(QNetworkRequest::Http2AllowedAttribute, m_http2);
+
 	// Explicitly load system CA certificates so SSL verification works
 	auto sslConfig = QSslConfiguration::defaultConfiguration();
 	sslConfig.setCaCertificates(QSslConfiguration::systemCaCertificates());

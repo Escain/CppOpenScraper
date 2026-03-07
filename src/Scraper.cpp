@@ -23,6 +23,11 @@ along with this library; if not, see <http://www.gnu.org/licenses/>.
 namespace CppScrap
 {
 
+auto Scraper::fetchRaw(const std::string& url) -> Fetcher::Result
+{
+	return m_fetcher.fetch(url);
+}
+
 auto Scraper::scrape(const std::string& url) -> ScrapedPage
 {
 	ScrapedPage page;

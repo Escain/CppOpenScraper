@@ -20,6 +20,8 @@ along with this library; if not, see <http://www.gnu.org/licenses/>.
 #define FETCHER_H
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace CppScrap
 {
@@ -49,11 +51,18 @@ public:
 	auto setTimeout(int msec) -> void { m_timeout = msec; }
 	/// @brief Enable or disable SSL certificate verification.
 	auto setIgnoreSslErrors(bool ignore) -> void { m_ignoreSslErrors = ignore; }
+	/// @brief Set arbitrary HTTP headers (name, value pairs).
+	auto setCustomHeaders(std::vector<std::pair<std::string, std::string>> headers) -> void
+		{ m_customHeaders = std::move(headers); }
+	/// @brief Enable or disable HTTP/2 (default: false, uses HTTP/1.1).
+	auto setHttp2Enabled(bool enabled) -> void { m_http2 = enabled; }
 
 private:
 	std::string m_userAgent = "CppOpenScraper/0.1";
+	std::vector<std::pair<std::string, std::string>> m_customHeaders;
 	int m_timeout = 30000;
 	bool m_ignoreSslErrors = true;
+	bool m_http2 = false;
 };
 
 }

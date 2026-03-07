@@ -23,6 +23,8 @@ along with this library; if not, see <http://www.gnu.org/licenses/>.
 #include "Fetcher.hpp"
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace CppScrap
 {
@@ -36,12 +38,20 @@ public:
 	/// @brief Fetch a URL, parse HTML, and extract content into a ScrapedPage.
 	auto scrape(const std::string& url) -> ScrapedPage;
 
+	/// @brief Fetch a URL and return the raw HTTP result without HTML parsing.
+	auto fetchRaw(const std::string& url) -> Fetcher::Result;
+
 	/// @brief Set the HTTP User-Agent header string.
 	auto setUserAgent(const std::string& ua) -> void { m_fetcher.setUserAgent(ua); }
 	/// @brief Set the request timeout in milliseconds.
 	auto setTimeout(int msec) -> void { m_fetcher.setTimeout(msec); }
 	/// @brief Enable or disable SSL certificate verification.
 	auto setIgnoreSslErrors(bool ignore) -> void { m_fetcher.setIgnoreSslErrors(ignore); }
+	/// @brief Set arbitrary HTTP headers.
+	auto setCustomHeaders(std::vector<std::pair<std::string, std::string>> headers) -> void
+		{ m_fetcher.setCustomHeaders(std::move(headers)); }
+	/// @brief Enable or disable HTTP/2.
+	auto setHttp2Enabled(bool enabled) -> void { m_fetcher.setHttp2Enabled(enabled); }
 
 private:
 	Fetcher m_fetcher;
