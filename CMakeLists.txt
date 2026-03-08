@@ -42,6 +42,20 @@ target_link_libraries(${TARGET}
 	PRIVATE lexbor_static
 )
 
+# Optional: poppler-cpp for PDF text extraction
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+	pkg_check_modules(POPPLER_CPP poppler-cpp)
+	if(POPPLER_CPP_FOUND)
+		target_link_libraries(${TARGET} PRIVATE ${POPPLER_CPP_LIBRARIES})
+		target_include_directories(${TARGET} PRIVATE ${POPPLER_CPP_INCLUDE_DIRS})
+		target_compile_definitions(${TARGET} PRIVATE HAS_POPPLER=1)
+		message(STATUS "CppOpenScraper: PDF support enabled (poppler-cpp found)")
+	else()
+		message(STATUS "CppOpenScraper: PDF support disabled (poppler-cpp not found)")
+	endif()
+endif()
+
 # Optional: example executable
 option(CPPSCRAPER_BUILD_EXAMPLES "Build example programs" OFF)
 if(CPPSCRAPER_BUILD_EXAMPLES)

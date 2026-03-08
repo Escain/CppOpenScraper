@@ -20,6 +20,11 @@ along with this library; if not, see <http://www.gnu.org/licenses/>.
 #include "LexborDocument.hpp"
 #include "ContentExtractor.hpp"
 
+#ifdef HAS_POPPLER
+#include <poppler/cpp/poppler-document.h>
+#include <poppler/cpp/poppler-page.h>
+#endif
+
 namespace CppScrap
 {
 
@@ -41,6 +46,35 @@ auto Scraper::scrape(const std::string& url) -> ScrapedPage
 	}
 
 	page.url = fetchResult.finalUrl;
+
+#ifdef HAS_POPPLER
+	if (fetchResult.contentType.find("application/pdf") != std::string::npos)
+	{
+		auto doc = poppler::document::load_from_raw_data(fetchResult.body.data(),
+			static_cast<int>(fetchResult.body.size()));
+		if (!doc)
+		{
+			page.error = "Failed to parse PDF document";
+			return page;
+		}
+
+		auto titleBytes = doc->get_title().to_utf8();
+		page.title = std::string(titleBytes.data(), titleBytes.size());
+
+		for (int i = 0; i < doc->pages(); i++)
+		{
+			auto p = doc->create_page(i);
+			if (p)
+			{
+				auto textBytes = p->text().to_utf8();
+				page.text += std::string(textBytes.data(), textBytes.size());
+				page.text += "\n";
+			}
+		}
+
+		return page;
+	}
+#endif
 
 	LexborDocument doc;
 	if (!doc.parse(fetchResult.body))
