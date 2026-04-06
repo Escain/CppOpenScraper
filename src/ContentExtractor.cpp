@@ -18,6 +18,8 @@ along with this library; if not, see <http://www.gnu.org/licenses/>.
 
 #include "ContentExtractor.hpp"
 
+#include <html2md.h>
+
 #include <QUrl>
 
 #include <algorithm>
@@ -95,24 +97,6 @@ auto normalizeWhitespace(const std::string& text) -> std::string
 	return result.substr(start);
 }
 
-constexpr auto isBlockTag(std::string_view tag) -> bool
-{
-	constexpr std::array blocks = {
-		std::string_view("div"),
-		std::string_view("section"),
-		std::string_view("article"),
-		std::string_view("main"),
-		std::string_view("td"),
-		std::string_view("body"),
-	};
-
-	for (const auto& b : blocks)
-	{
-		if (tag == b) return true;
-	}
-	return false;
-}
-
 auto isFilteredImage(const std::string& src, const std::string& cls,
 	const std::string& alt, const std::string& width, const std::string& height) -> bool
 {
@@ -150,30 +134,6 @@ auto isFilteredImage(const std::string& src, const std::string& cls,
 	return false;
 }
 
-auto linkTextLength(LexborDocument& doc, LexborDocument::Node node) -> int
-{
-	auto links = doc.findByTag(node, "a");
-	int total = 0;
-	for (auto* link : links)
-	{
-		total += static_cast<int>(doc.textContent(link).size());
-	}
-	return total;
-}
-
-auto countChildElements(LexborDocument& doc, LexborDocument::Node node) -> int
-{
-	int count = 0;
-	for (auto* child = doc.firstChild(node); child; child = doc.nextSibling(child))
-	{
-		if (doc.isElement(child))
-		{
-			++count;
-		}
-	}
-	return count;
-}
-
 } // anonymous namespace
 
 
@@ -189,16 +149,17 @@ auto ContentExtractor::extract(LexborDocument& doc, const std::string& baseUrl) 
 
 	removeUnwantedElements(doc);
 	removeBoilerplate(doc);
+	removeAdElements(doc);
 
-	auto* mainNode = findMainContent(doc);
-	if (!mainNode)
-	{
-		mainNode = body;
-	}
+	// Serialize cleaned DOM to HTML, then convert to markdown.
+	auto cleanedHtml = doc.serializeHtml(body);
+	html2md::Options opts;
+	opts.splitLines = false;
+	html2md::Converter converter(cleanedHtml, &opts);
+	result.text = converter.convert();
 
-	result.text = extractText(doc, mainNode);
-	result.images = extractImages(doc, mainNode, baseUrl);
-	result.links = extractLinks(doc, mainNode, baseUrl);
+	result.images = extractImages(doc, body, baseUrl);
+	result.links = extractLinks(doc, body, baseUrl);
 
 	return result;
 }
@@ -213,9 +174,7 @@ auto ContentExtractor::removeUnwantedElements(LexborDocument& doc) const -> void
 
 	static const std::array unwantedTags = {
 		std::string("script"), std::string("style"), std::string("noscript"),
-		std::string("iframe"), std::string("svg"), std::string("form"),
-		std::string("button"), std::string("input"), std::string("select"),
-		std::string("textarea"),
+		std::string("iframe"),
 	};
 
 	for (const auto& tag : unwantedTags)
@@ -237,7 +196,10 @@ auto ContentExtractor::removeBoilerplate(LexborDocument& doc) const -> void
 		return;
 	}
 
-	// Remove boilerplate semantic tags
+	// Remove only unambiguous semantic boilerplate tags.
+	// Class/id pattern matching is intentionally omitted:
+	// substring matching on class names is too unreliable
+	// and removes real content on many sites.
 	static const std::array boilerplateTags = {
 		std::string("nav"), std::string("header"), std::string("footer"),
 		std::string("aside"), std::string("menu"),
@@ -251,9 +213,18 @@ auto ContentExtractor::removeBoilerplate(LexborDocument& doc) const -> void
 			doc.removeNode(node);
 		}
 	}
+}
 
-	// Remove elements with boilerplate class/id patterns
-	// We need to walk the tree and check class/id attributes
+auto ContentExtractor::removeAdElements(LexborDocument& doc) const -> void
+{
+	auto* body = doc.body();
+	if (!body)
+	{
+		return;
+	}
+
+	// Walk the DOM tree and collect elements that are ads/sponsored.
+	// Uses standard HTML attributes, not class name heuristics.
 	std::vector<LexborDocument::Node> toRemove;
 
 	std::vector<LexborDocument::Node> stack;
@@ -269,29 +240,60 @@ auto ContentExtractor::removeBoilerplate(LexborDocument& doc) const -> void
 			continue;
 		}
 
-		auto tag = doc.tagName(node);
+		bool isAd = false;
 
-		// Never remove article or main elements
-		if (tag == "article" || tag == "main")
+		// 1. Links with rel="sponsored"
+		auto rel = doc.attribute(node, "rel");
+		if (rel.find("sponsored") != std::string::npos)
 		{
-			// Still traverse children
-			for (auto* child = doc.firstChild(node); child; child = doc.nextSibling(child))
-			{
-				stack.push_back(child);
-			}
+			isAd = true;
+		}
+
+		// 2. Google AdSense: <ins class="adsbygoogle">
+		auto tag = doc.tagName(node);
+		auto cls = doc.className(node);
+		if (tag == "ins" && cls.find("adsbygoogle") != std::string::npos)
+		{
+			isAd = true;
+		}
+
+		// 3. Elements with data-ad* attributes
+		if (!isAd && !doc.attribute(node, "data-ad").empty())
+		{
+			isAd = true;
+		}
+		if (!isAd && !doc.attribute(node, "data-ad-slot").empty())
+		{
+			isAd = true;
+		}
+		if (!isAd && !doc.attribute(node, "data-ad-client").empty())
+		{
+			isAd = true;
+		}
+
+		// 4. Modal dialogs (login, upgrade, share overlays)
+		if (!isAd && doc.attribute(node, "role") == "dialog")
+		{
+			isAd = true;
+		}
+
+		// 5. Cookie/consent management overlays
+		auto nodeId = doc.id(node);
+		if (!isAd && (nodeId.find("cookie") != std::string::npos
+			|| nodeId.find("consent") != std::string::npos
+			|| nodeId.find("cmp") != std::string::npos))
+		{
+			isAd = true;
+		}
+
+		if (isAd)
+		{
+			toRemove.push_back(node);
 			continue;
 		}
 
-		auto nodeId = doc.id(node);
-		auto nodeClass = doc.className(node);
-
-		if (matchesBoilerplatePattern(nodeId) || matchesBoilerplatePattern(nodeClass))
-		{
-			toRemove.push_back(node);
-			continue; // Don't traverse children of removed nodes
-		}
-
-		for (auto* child = doc.firstChild(node); child; child = doc.nextSibling(child))
+		for (auto* child = doc.firstChild(node); child;
+			child = doc.nextSibling(child))
 		{
 			stack.push_back(child);
 		}
@@ -301,95 +303,6 @@ auto ContentExtractor::removeBoilerplate(LexborDocument& doc) const -> void
 	{
 		doc.removeNode(node);
 	}
-}
-
-auto ContentExtractor::findMainContent(LexborDocument& doc) const -> LexborDocument::Node
-{
-	auto* body = doc.body();
-	if (!body)
-	{
-		return nullptr;
-	}
-
-	LexborDocument::Node bestNode = nullptr;
-	int bestScore = 0;
-
-	std::vector<LexborDocument::Node> stack;
-	stack.push_back(body);
-
-	while (!stack.empty())
-	{
-		auto* node = stack.back();
-		stack.pop_back();
-
-		if (!doc.isElement(node))
-		{
-			continue;
-		}
-
-		auto tag = doc.tagName(node);
-
-		if (isBlockTag(tag))
-		{
-			int score = scoreNode(doc, node);
-			if (score > bestScore)
-			{
-				bestScore = score;
-				bestNode = node;
-			}
-		}
-
-		for (auto* child = doc.firstChild(node); child; child = doc.nextSibling(child))
-		{
-			stack.push_back(child);
-		}
-	}
-
-	return bestNode;
-}
-
-auto ContentExtractor::scoreNode(LexborDocument& doc, LexborDocument::Node node) const -> int
-{
-	auto text = doc.textContent(node);
-	int textLen = static_cast<int>(text.size());
-	int linkLen = linkTextLength(doc, node);
-
-	int score = textLen - linkLen * 2;
-
-	auto tag = doc.tagName(node);
-	if (tag == "article") score += 100;
-	else if (tag == "main") score += 80;
-
-	auto nodeId = toLower(doc.id(node));
-	auto nodeClass = toLower(doc.className(node));
-	auto combined = nodeId + " " + nodeClass;
-
-	static const std::array contentPatterns = {
-		std::string("article"), std::string("content"), std::string("post"),
-		std::string("entry"), std::string("story"),
-	};
-
-	for (const auto& pattern : contentPatterns)
-	{
-		if (combined.find(pattern) != std::string::npos)
-		{
-			score += 50;
-			break;
-		}
-	}
-
-	if (countChildElements(doc, node) < 3)
-	{
-		score -= 30;
-	}
-
-	return score;
-}
-
-auto ContentExtractor::extractText(LexborDocument& doc, LexborDocument::Node node) const -> std::string
-{
-	auto raw = doc.textContent(node);
-	return normalizeWhitespace(raw);
 }
 
 auto ContentExtractor::extractImages(LexborDocument& doc, LexborDocument::Node node,
@@ -463,32 +376,5 @@ auto ContentExtractor::resolveUrl(const std::string& relative, const std::string
 	return resolved.toString().toStdString();
 }
 
-auto ContentExtractor::matchesBoilerplatePattern(const std::string& classOrId) const -> bool
-{
-	if (classOrId.empty())
-	{
-		return false;
-	}
-
-	auto lower = toLower(classOrId);
-
-	static const std::array patterns = {
-		std::string("nav"), std::string("menu"), std::string("sidebar"),
-		std::string("footer"), std::string("header"), std::string("breadcrumb"),
-		std::string("social"), std::string("share"), std::string("comment"),
-		std::string("widget"), std::string("advert"), std::string("banner"),
-		std::string("cookie"), std::string("popup"), std::string("modal"),
-	};
-
-	for (const auto& pattern : patterns)
-	{
-		if (lower.find(pattern) != std::string::npos)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
 
 }

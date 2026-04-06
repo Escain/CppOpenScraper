@@ -49,15 +49,16 @@ auto main(int argc, char* argv[]) -> int
 	std::cout << "URL: " << page.url << "\n";
 	std::cout << "Title: " << page.title << "\n\n";
 
-	std::cout << "--- Text (first 500 chars) ---\n";
-	if (page.text.size() > 500)
+	std::cout << "--- Markdown (first 1000 chars) ---\n";
+	if (page.text.size() > 1000)
 	{
-		std::cout << page.text.substr(0, 500) << "...\n";
+		std::cout << page.text.substr(0, 1000) << "\n...\n";
 	}
 	else
 	{
 		std::cout << page.text << "\n";
 	}
+	std::cout << "(" << page.text.size() << " bytes total)\n";
 
 	std::cout << "\n--- Images (" << page.images.size() << " total) ---\n";
 	size_t imgLimit = std::min(page.images.size(), size_t(5));

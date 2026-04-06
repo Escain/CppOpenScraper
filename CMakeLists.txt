@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(CppOpenScraper VERSION 0.1.0 LANGUAGES CXX C)
+project(CppOpenScraper VERSION 0.2.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,6 +27,8 @@ add_library(${TARGET} SHARED
 	src/Fetcher.cpp
 	src/LexborDocument.cpp
 	src/ContentExtractor.cpp
+	external/html2md/src/html2md.cpp
+	external/html2md/src/table.cpp
 )
 
 set_property(TARGET ${TARGET} PROPERTY AUTOMOC ON)
@@ -35,6 +37,7 @@ target_compile_options(${TARGET} PRIVATE -fPIC)
 target_include_directories(${TARGET}
 	PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
 	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/lexbor/source
+	PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external/html2md/include
 )
 
 target_link_libraries(${TARGET}
@@ -61,4 +64,11 @@ option(CPPSCRAPER_BUILD_EXAMPLES "Build example programs" OFF)
 if(CPPSCRAPER_BUILD_EXAMPLES)
 	add_executable(scrape_url examples/scrape_url.cpp)
 	target_link_libraries(scrape_url PRIVATE ${TARGET})
+endif()
+
+# Optional: tests
+option(CPPSCRAPER_BUILD_TESTS "Build unit tests" OFF)
+if(CPPSCRAPER_BUILD_TESTS)
+	enable_testing()
+	add_subdirectory(tests)
 endif()

@@ -19,6 +19,7 @@ along with this library; if not, see <http://www.gnu.org/licenses/>.
 #include "LexborDocument.hpp"
 
 #include <lexbor/html/html.h>
+#include <lexbor/html/serialize.h>
 #include <lexbor/dom/dom.h>
 #include <lexbor/dom/interfaces/element.h>
 
@@ -224,6 +225,27 @@ auto LexborDocument::isElement(Node node) const -> bool
 auto LexborDocument::isText(Node node) const -> bool
 {
 	return node && node->type == LXB_DOM_NODE_TYPE_TEXT;
+}
+
+auto LexborDocument::serializeHtml(Node node) const -> std::string
+{
+	if (!node)
+	{
+		return {};
+	}
+
+	std::string result;
+
+	auto callback = [](const lxb_char_t *data, size_t len,
+		void *ctx) -> lxb_status_t
+	{
+		auto *out = static_cast<std::string *>(ctx);
+		out->append(reinterpret_cast<const char *>(data), len);
+		return LXB_STATUS_OK;
+	};
+
+	lxb_html_serialize_deep_cb(node, callback, &result);
+	return result;
 }
 
 auto LexborDocument::removeNode(Node node) -> void
