@@ -1,3 +1,6 @@
 [submodule "external/lexbor"]
 	path = external/lexbor
 	url = https://github.com/lexbor/lexbor
+[submodule "external/html2md"]
+	path = external/html2md
+	url = https://github.com/tim-gromeyer/html2md.git

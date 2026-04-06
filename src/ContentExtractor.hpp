@@ -48,12 +48,8 @@ private:
 	auto removeUnwantedElements(LexborDocument& doc) const -> void;
 	/// @brief Remove nav, header, footer, sidebar and boilerplate elements.
 	auto removeBoilerplate(LexborDocument& doc) const -> void;
-	/// @brief Score block elements to find the main content container.
-	auto findMainContent(LexborDocument& doc) const -> LexborDocument::Node;
-	/// @brief Heuristically score a node by text density and semantic hints.
-	auto scoreNode(LexborDocument& doc, LexborDocument::Node node) const -> int;
-	/// @brief Extract and normalize whitespace in text content.
-	auto extractText(LexborDocument& doc, LexborDocument::Node node) const -> std::string;
+	/// @brief Remove ad/sponsored elements identified by standard HTML attributes.
+	auto removeAdElements(LexborDocument& doc) const -> void;
 	/// @brief Collect content images, filtering icons, logos and tracking pixels.
 	auto extractImages(LexborDocument& doc, LexborDocument::Node node,
 		const std::string& baseUrl) const -> std::vector<ScrapedImage>;
@@ -62,8 +58,6 @@ private:
 		const std::string& baseUrl) const -> std::vector<ScrapedLink>;
 	/// @brief Resolve a relative URL against a base URL.
 	auto resolveUrl(const std::string& relative, const std::string& base) const -> std::string;
-	/// @brief Check if a class or id string matches boilerplate keywords.
-	auto matchesBoilerplatePattern(const std::string& classOrId) const -> bool;
 };
 
 }

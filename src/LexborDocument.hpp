@@ -69,6 +69,9 @@ public:
 	/// @brief Check if a node is a text node.
 	auto isText(Node node) const -> bool;
 
+	/// @brief Serialize a node subtree back to an HTML string.
+	auto serializeHtml(Node node) const -> std::string;
+
 	/// @brief Detach and destroy a node and its entire subtree.
 	auto removeNode(Node node) -> void;
 
